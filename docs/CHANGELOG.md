@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [修复] 收紧港股新闻相关度中的裸短码匹配，避免将指数点数等普通数字误判为目标股票代码。
 - [修复] 修复个股新闻相关度中美股小写 ticker 后缀识别与 A/HK 弱相关新闻中文优先比较顺序。
 - [文档] Issue #1356 的结构化检测告警为既有上下文误报：本次仅调整个股新闻检索的相关度评分与分层排序（`direct_company_news` / `sector_related_news` / `macro_market_news`），不触及模型名、provider、LiteLLM 参数、Base URL 及运行时配置清理/迁移语义；无配置回写副作用，回退路径为回滚本次提交。
+- [新功能] 新增 `scripts/signal_summary_yf.py` 独立信号摘要脚本：基于 yfinance 计算自选清单（核心/投机/杠杆/加密分组）的 SMA20/50/200、Wilder RSI14、3/6 个月动量、SOXX 半导体行业过滤与综合信号，内置历史信号回测（CAGR/Sharpe/最大回撤/胜率/20 日前瞻收益 vs 买入持有）与 `--verify` 跨源收盘价校验，输出 Markdown 表格与 CSV，并以 HKT 时间戳标记运行。
 
 ## [3.17.1] - 2026-05-16
 
