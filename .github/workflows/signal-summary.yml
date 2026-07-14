@@ -1,0 +1,56 @@
+name: Daily Signal Summary
+
+# 08:30 HKT Tue–Sat (00:30 UTC): each run picks up the previous US close
+# (US Fri close lands Sat ~04:00 HKT, hence Tue–Sat rather than Mon–Fri).
+on:
+  schedule:
+    - cron: '30 0 * * 2-6'
+  workflow_dispatch:
+    inputs:
+      period:
+        description: 'History window for indicators/backtest (2y/5y/max)'
+        required: false
+        default: '2y'
+
+permissions:
+  contents: read
+
+jobs:
+  signal-summary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install yfinance pandas numpy tabulate
+
+      - name: Run signal summary + backtest
+        run: |
+          python scripts/signal_summary_yf.py \
+            --period "${{ github.event.inputs.period || '2y' }}" \
+            --csv signals_summary.csv | tee signal_report.md
+
+      - name: Publish report to job summary
+        if: always()
+        run: |
+          {
+            echo "## Daily Signal Summary"
+            echo ""
+            echo '```'
+            cat signal_report.md
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload CSV + report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: signal-summary-${{ github.run_id }}
+          path: |
+            signals_summary.csv
+            signal_report.md
+          retention-days: 90
