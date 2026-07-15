@@ -161,6 +161,88 @@ def backtest(close, score, cost=TRADE_COST):
     }
 
 
+# ---------------------------------------------------------------- email
+# 与主应用同一套环境变量：EMAIL_SENDER / EMAIL_PASSWORD / EMAIL_RECEIVERS，
+# SMTP 按发件人域名自动识别；不在下表的域名可用 EMAIL_SMTP_SERVER /
+# EMAIL_SMTP_PORT / EMAIL_SMTP_SSL 显式指定。
+SMTP_CONFIGS = {
+    'qq.com': {'server': 'smtp.qq.com', 'port': 465, 'ssl': True},
+    'foxmail.com': {'server': 'smtp.qq.com', 'port': 465, 'ssl': True},
+    '163.com': {'server': 'smtp.163.com', 'port': 465, 'ssl': True},
+    '126.com': {'server': 'smtp.126.com', 'port': 465, 'ssl': True},
+    'gmail.com': {'server': 'smtp.gmail.com', 'port': 587, 'ssl': False},
+    'outlook.com': {'server': 'smtp-mail.outlook.com', 'port': 587, 'ssl': False},
+    'hotmail.com': {'server': 'smtp-mail.outlook.com', 'port': 587, 'ssl': False},
+    'live.com': {'server': 'smtp-mail.outlook.com', 'port': 587, 'ssl': False},
+    'aliyun.com': {'server': 'smtp.aliyun.com', 'port': 465, 'ssl': True},
+    '139.com': {'server': 'smtp.139.com', 'port': 465, 'ssl': True},
+}
+
+
+def send_email_report(subject, body_text, attachments=()):
+    """Send the report via SMTP (stdlib only). Returns True on success.
+    Missing configuration is a graceful skip, never an error, so the
+    analysis run stays green when email is not set up."""
+    import html
+    import os
+    import smtplib
+    from email.mime.application import MIMEApplication
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    sender = (os.getenv('EMAIL_SENDER') or '').strip()
+    password = (os.getenv('EMAIL_PASSWORD') or '').strip()
+    if not sender or not password:
+        print('Email not configured (EMAIL_SENDER/EMAIL_PASSWORD empty); skipping email.')
+        return False
+    receivers = [r.strip() for r in (os.getenv('EMAIL_RECEIVERS') or '').split(',')
+                 if r.strip()] or [sender]
+
+    domain = sender.rsplit('@', 1)[-1].lower()
+    auto = SMTP_CONFIGS.get(domain, {})
+    host = (os.getenv('EMAIL_SMTP_SERVER') or '').strip() or auto.get('server')
+    if not host:
+        print(f'No SMTP config for sender domain "{domain}"; '
+              'set EMAIL_SMTP_SERVER / EMAIL_SMTP_PORT. Skipping email.')
+        return False
+    port = int((os.getenv('EMAIL_SMTP_PORT') or '').strip() or auto.get('port') or 465)
+    ssl_raw = (os.getenv('EMAIL_SMTP_SSL') or '').strip().lower()
+    use_ssl = ssl_raw in ('1', 'true', 'yes') if ssl_raw else auto.get('ssl', port == 465)
+
+    msg = MIMEMultipart()
+    msg['Subject'] = subject
+    msg['From'] = sender
+    msg['To'] = ', '.join(receivers)
+    body = (f"<html><body><pre style='font-family:Menlo,Consolas,monospace;"
+            f"font-size:12px'>{html.escape(body_text)}</pre></body></html>")
+    msg.attach(MIMEText(body, 'html', 'utf-8'))
+    for path in attachments:
+        try:
+            with open(path, 'rb') as f:
+                part = MIMEApplication(f.read(), Name=os.path.basename(path))
+            part['Content-Disposition'] = (
+                f'attachment; filename="{os.path.basename(path)}"')
+            msg.attach(part)
+        except OSError:
+            pass
+
+    try:
+        if use_ssl:
+            server = smtplib.SMTP_SSL(host, port, timeout=30)
+        else:
+            server = smtplib.SMTP(host, port, timeout=30)
+        with server:
+            if not use_ssl:
+                server.starttls()
+            server.login(sender, password)
+            server.sendmail(sender, receivers, msg.as_string())
+        print(f'Email sent to {len(receivers)} receiver(s) via {host}:{port}.')
+        return True
+    except Exception as e:
+        print(f'Email send failed: {e}')
+        return False
+
+
 # ---------------------------------------------------------------- pipeline
 def build_summary(data, do_backtest=True):
     """data: yf.download(group_by='ticker') MultiIndex frame."""
@@ -255,28 +337,38 @@ def main():
     ap.add_argument('--verify', action='store_true',
                     help='cross-check last close vs Stooq (needs pandas-datareader)')
     ap.add_argument('--csv', default='signals_summary.csv')
+    ap.add_argument('--email', action='store_true',
+                    help='email the report (EMAIL_SENDER/EMAIL_PASSWORD/'
+                         'EMAIL_RECEIVERS env, same as main app)')
     args = ap.parse_args()
+
+    report = []
+
+    def emit(line=''):
+        print(line)
+        report.append(line)
 
     import yfinance as yf
     run_tag = datetime.now(ZoneInfo('Asia/Hong_Kong')).strftime('%Y-%m-%d %H:%M HKT')
-    print(f"Run tag: {run_tag}\nFetching {len(ALL_TICKERS)} tickers ({args.period})...")
+    emit(f"Run tag: {run_tag}")
+    print(f"Fetching {len(ALL_TICKERS)} tickers ({args.period})...")
     data = yf.download(ALL_TICKERS, period=args.period, group_by='ticker',
                        auto_adjust=True, progress=False, threads=True)
 
     df, bt, proxy_name, failed = build_summary(data, do_backtest=not args.no_backtest)
 
-    print("\n=== SIGNAL TABLE ===")
-    print(df.to_markdown(index=False))
+    emit("\n=== SIGNAL TABLE ===")
+    emit(df.to_markdown(index=False))
     if not bt.empty:
-        print("\n=== BACKTEST (score>=2 long / else flat, next-close exec, "
-              f"{TRADE_COST*1e4:.0f}bp cost) ===")
-        print(bt.to_markdown(index=False))
+        emit("\n=== BACKTEST (score>=2 long / else flat, next-close exec, "
+             f"{TRADE_COST*1e4:.0f}bp cost) ===")
+        emit(bt.to_markdown(index=False))
     if proxy_name:
         row = df[df['Symbol'] == proxy_name]
         status = row.iloc[0]['SMA_Status'] if len(row) else 'n/a'
-        print(f"\nSector proxy {proxy_name}: {status}")
+        emit(f"\nSector proxy {proxy_name}: {status}")
     if failed:
-        print(f"Failed/invalid tickers: {failed}")
+        emit(f"Failed/invalid tickers: {failed}")
 
     if args.verify:
         try:
@@ -296,6 +388,10 @@ def main():
 
     df.to_csv(args.csv, index=False)
     print(f"\nSaved {args.csv} | Run tag: {run_tag}")
+
+    if args.email:
+        send_email_report(f"Daily Signal Summary — {run_tag}",
+                          '\n'.join(report), attachments=[args.csv])
 
 
 if __name__ == '__main__':
