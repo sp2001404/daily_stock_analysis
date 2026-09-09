@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [文档] Issue #1356 的结构化检测告警为既有上下文误报：本次仅调整个股新闻检索的相关度评分与分层排序（`direct_company_news` / `sector_related_news` / `macro_market_news`），不触及模型名、provider、LiteLLM 参数、Base URL 及运行时配置清理/迁移语义；无配置回写副作用，回退路径为回滚本次提交。
 - [新功能] 新增 `scripts/signal_summary_yf.py` 独立信号摘要脚本：基于 yfinance 计算自选清单（核心/投机/杠杆/加密分组）的 SMA20/50/200、Wilder RSI14、3/6 个月动量、SOXX 半导体行业过滤与综合信号，内置历史信号回测（CAGR/Sharpe/最大回撤/胜率/20 日前瞻收益 vs 买入持有）与 `--verify` 跨源收盘价校验，输出 Markdown 表格与 CSV，并以 HKT 时间戳标记运行。
 - [新功能] 新增 `signal-summary.yml` 定时工作流：每个交易日 08:30 HKT（UTC 周二至周六 00:30）自动运行信号摘要与回测，结果写入 job summary 并上传 CSV/报告 artifact，支持手动触发与自定义回看窗口。
+- [新功能] `scripts/signal_summary_yf.py` 新增 `--email` 邮件推送：复用主应用 `EMAIL_SENDER`/`EMAIL_PASSWORD`/`EMAIL_RECEIVERS` 配置与域名 SMTP 自动识别（可用 `EMAIL_SMTP_SERVER`/`EMAIL_SMTP_PORT`/`EMAIL_SMTP_SSL` 覆盖），信号摘要工作流每日运行后自动发送报告正文与 CSV 附件；未配置时优雅跳过不影响运行。
 
 ## [3.17.1] - 2026-05-16
 

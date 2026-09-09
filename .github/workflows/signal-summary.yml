@@ -30,10 +30,19 @@ jobs:
         run: pip install yfinance pandas numpy tabulate
 
       - name: Run signal summary + backtest
+        env:
+          # Same email config as 00-daily-analysis.yml; if unset the
+          # script skips emailing without failing the run.
+          EMAIL_SENDER: ${{ vars.EMAIL_SENDER || secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECEIVERS: ${{ vars.EMAIL_RECEIVERS || secrets.EMAIL_RECEIVERS }}
+          EMAIL_SMTP_SERVER: ${{ vars.EMAIL_SMTP_SERVER || secrets.EMAIL_SMTP_SERVER }}
+          EMAIL_SMTP_PORT: ${{ vars.EMAIL_SMTP_PORT || secrets.EMAIL_SMTP_PORT }}
+          EMAIL_SMTP_SSL: ${{ vars.EMAIL_SMTP_SSL || secrets.EMAIL_SMTP_SSL }}
         run: |
           python scripts/signal_summary_yf.py \
             --period "${{ github.event.inputs.period || '2y' }}" \
-            --csv signals_summary.csv | tee signal_report.md
+            --csv signals_summary.csv --email | tee signal_report.md
 
       - name: Publish report to job summary
         if: always()
