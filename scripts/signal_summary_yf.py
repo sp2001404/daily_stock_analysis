@@ -26,7 +26,7 @@ warnings.filterwarnings('ignore')
 # ---------------------------------------------------------------- watchlist
 CORE = ['INTC', 'MU', 'SNDK', 'MRVL', 'AMD', 'NVDA', 'QCOM', 'LITE', 'AAPL',
         'GOOG', '000660.KS', '7709.HK']
-SPEC = ['SATS', '2209.HK']            # 2209.HK = YesAsia Holdings
+SPEC = ['2209.HK']                    # 2209.HK = YesAsia Holdings
 LEV = ['SOXL', 'SOXS', 'SQQQ']
 CRYPTO = ['BTC-USD', 'ETH-USD']
 SECTOR_PROXY = ['SOXX']               # primary sector proxy; SOXL is fallback
